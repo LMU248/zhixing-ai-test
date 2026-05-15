@@ -17,8 +17,9 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .page{max-width:640px;margin:0 auto;padding:24px 20px 80px;min-height:100vh;display:flex;flex-direction:column}
-.step{display:none;flex:1}
-.step.active{display:block}
+.step{display:none;flex:1;transition:opacity .25s ease}
+.step.active{display:block;animation:fadeIn .35s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
 /* Masthead */
 .masthead{text-align:center;padding:40px 0 8px;border-bottom:.5px solid rgba(29,32,106,.06);margin-bottom:32px}
@@ -138,26 +139,17 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
     <div class="quiz-count" id="qcount">第 1/10 题</div>
   </div>
   <div class="quiz-q" id="qarea"></div>
-  <button class="btn-next" id="btnNext" onclick="nextQuestion()" disabled>下一题 →</button>
+  <div style="display:flex;gap:10px">
+    <button class="btn-next" id="btnPrev" onclick="prevQuestion()" style="display:none;background:#fff;color:var(--p-deep);border:.5px solid rgba(29,32,106,.12)">← 上一题</button>
+    <button class="btn-next" id="btnNext" onclick="nextQuestion()" disabled>下一题 →</button>
+  </div>
 </div>
 
 <!-- ====== Step 3: Report ====== -->
 <div class="step" id="step-report">
   <div class="report" id="reportArea"></div>
-  <button class="btn-next" style="margin-top:20px" onclick="showMatch()">查看推荐课程 →</button>
 </div>
 
-<!-- ====== Step 4: Match ====== -->
-<div class="step" id="step-match">
-  <div class="match" id="matchArea"></div>
-  <div class="match-actions" style="margin-top:20px">
-    <a class="btn-consult" href="#" onclick="openSheet();return false">咨询77助理 →</a>
-    <button class="btn-retake" onclick="retake()">重新测评</button>
-  </div>
-  <div class="footer">
-    本测评基于《AI高阶操盘手》课程能力模型设计<br>知行新商学 © 2025
-  </div>
-</div>
 
 </div><!-- /page -->
 
@@ -222,7 +214,8 @@ var userInfo = {};
 
 // ── Routing ──
 function showStep(id){
-  document.querySelectorAll('.step').forEach(function(s){s.classList.remove('active')});
+  var steps = document.querySelectorAll('.step');
+  for(var i=0;i<steps.length;i++){steps[i].classList.remove('active')}
   document.getElementById('step-'+id).classList.add('active');
   window.location.hash = id;
   window.scrollTo(0,0);
@@ -265,6 +258,7 @@ function renderQuestion(){
     document.getElementById('btnNext').disabled = answers[currentQ]===undefined;
   }
   document.getElementById('btnNext').textContent = currentQ === 9 ? '查看报告 →' : '下一题 →';
+  document.getElementById('btnPrev').style.display = currentQ > 0 ? '' : 'none';
   window.scrollTo(0,0);
 }
 
@@ -276,7 +270,7 @@ function selectOpt(idx,el){
   document.getElementById('btnNext').disabled = false;
 }
 
-// ── Next ──
+// ── Navigation ──
 function nextQuestion(){
   var d = quizData[currentQ];
   if(!d.opts){
@@ -288,6 +282,15 @@ function nextQuestion(){
   } else {
     renderQuestion();
   }
+}
+
+function prevQuestion(){
+  var d = quizData[currentQ];
+  if(!d.opts && document.getElementById('openAnswer')){
+    answers[currentQ] = document.getElementById('openAnswer').value;
+  }
+  currentQ--;
+  renderQuestion();
 }
 
 // ── Scoring ──
@@ -372,76 +375,69 @@ function drawRadar(dims){
   return svg;
 }
 
-// ── Show Report ──
+// ── Show Report + Course Match (one page, soft tone) ──
 function showReport(){
   var sc = calcScores();
   var tier = getTier(sc.total);
   var dims = sc.dims;
 
-  // Weakest & strongest
   var dimKeys = ['商业判断力','AI工具力','自动化力','技术落地力'];
   var sorted = dimKeys.slice().sort(function(a,b){return dims[a]-dims[b]});
   var weakest = sorted[0], strongest = sorted[3];
 
   var dimTips = {
-    '商业判断力':'Day1上午的"AI商业机会全景+ROI速算+五环节拆解法"模块，就是为你设计的——学会给任何企业出改造方案。',
-    'AI工具力':'Day1上午的"海外AI工具注册与能力对比"模块，带你现场注册Claude Pro/ChatGPT Plus，实测对比国内工具差距。',
-    '自动化力':'Day1下午的"n8n自动化全系列"是你的必修课——从第一个工作流到企业级全链路打通。',
-    '技术落地力':'Day2的"AI编程+小龙虾深度实战"会彻底改变你的认知——不用懂代码，用嘴说就能做出APP和内部系统。'
+    '商业判断力':'你最需要提升的是商业判断力——学会拆解业务流程、算ROI、排优先级。这是接AI改造项目的"入场券"。',
+    'AI工具力':'海外AI工具的能力远超市面上的免费产品。掌握它们，你的产出质量和效率会有质的飞跃。',
+    '自动化力':'自动化能力是AI改造企业的核心——把零散的AI调用变成能跑业务的系统，这是从"会用AI"到"能靠AI赚钱"的关键一跳。',
+    '技术落地力':'不用担心不懂代码。现在有了AI编程工具，用自然语言就能做出系统。你离"能搭出能用的AI系统"只差一次正确的学习。'
   };
 
-  var h = '';
-  h += '<div class="rpt-header"><div class="rpt-tier">'+tier.emoji+' '+tier.name+'</div><div class="rpt-label">'+tier.label+' · 总分 '+sc.total+'/27</div></div>';
-  h += '<div class="radar-box"><p style="font-size:12px;color:var(--text3);margin-bottom:8px;">4维能力雷达</p>'+drawRadar(dims)+'</div>';
-  h += '<div class="analysis"><div class="strengths"><h4>✅ 你的优势：'+strongest+'</h4><p>这是你目前最强的能力维度。建议继续放大这个优势，把它变成你的差异化标签。</p></div>';
-  h += '<div class="weakness"><h4>⚠ 最该补的短板：'+weakest+'</h4><p>'+dimTips[weakest]+'</p></div>';
-  h += '<div class="path-rec"><h4>📋 升级路径</h4><p>'+tier.desc+'</p></div></div>';
-
-  document.getElementById('reportArea').innerHTML = h;
-  showStep('report');
-
-  // Store for match
-  window._report = {sc:sc,tier:tier,weakest:weakest,strongest:strongest};
-}
-
-// ── Show Match ──
-function showMatch(){
-  var r = window._report;
-  var tier = r.tier;
-  var sc = r.sc;
-
-  var courseRec, commRec, reason, modules;
+  // Course rec (embedded naturally)
+  var courseName, coursePrice, courseWhy;
+  var commName, commPrice;
   if(sc.total <= 9){
-    courseRec = {name:'AI兴趣激发课',price:'价格根据社群等级',badge:'入门必学'};
-    reason = '作为探索者，你需要先建立AI认知体系和使用习惯。这门课帮你快速建立AI全局视野，为后续深入学习打好基础。';
-    modules = '匹配模块：AI基础认知 · 工具入门 · 商业场景初探';
-    commRec = {name:'分群 或 总群',price:'19.9元 或 99元'};
+    courseName = 'AI兴趣激发课'; coursePrice = '价格根据社群等级'; courseWhy = '帮你快速建立AI全局视野，知道AI能做什么、不能做什么、从哪里开始。';
+    commName = '分群（19.9元）或 总群（99元）';
   } else if(sc.total <= 18){
-    courseRec = {name:'AI操盘手高阶课',price:'¥10,000/人',badge:'核心推荐'};
-    reason = '作为构建者，你缺的是体系化方法和复杂系统搭建经验。2天1晚线下实战营，从商业诊断到AI员工搭建到自动化全链路，学完就能接项目。';
-    modules = '匹配模块：AI商业诊断 · n8n全系列 · AI客服/销售系统 · Vibe Coding · 小龙虾Agent';
-    commRec = {name:'预备共创群',price:'押金2,000元（1年后返还）'};
+    courseName = 'AI操盘手高阶课'; coursePrice = '¥10,000/人'; courseWhy = '2天1晚线下实战营，从商业诊断到AI员工搭建到自动化全链路，学完就能独立接项目。';
+    commName = '预备共创群（押金2,000元，1年后返还）';
   } else {
-    courseRec = {name:'AI操盘手高阶课 + 私董会',price:'¥10,000 + ¥9,186',badge:'高阶组合'};
-    reason = '作为操盘手，你已能独立做项目。下一步需要高端圈层资源对接+企业级客户渠道。课程+私董会组合让你从"能干"升级到"能规模化"。';
-    modules = '匹配模块：企业AI化改造全案 · 多龙虾AI员工架构 · 私董会高端人脉 · 6个AI员工赠送';
-    commRec = {name:'私董会',price:'9,186元'};
+    courseName = 'AI操盘手高阶课 + 私董会'; coursePrice = '¥10,000 + ¥9,186'; courseWhy = '你已能独立做项目，下一步需要高端圈层资源+企业级客户渠道，从"能干"升级到"能规模化"。';
+    commName = '私董会（9,186元）';
   }
 
   var h = '';
-  h += '<h2 style="font-family:var(--font-title);font-size:24px;font-weight:700;color:var(--p-deep);margin-bottom:6px;">你的专属方案</h2>';
-  h += '<p style="font-size:14px;color:var(--text3);margin-bottom:24px;">基于你的诊断结果，我们为你匹配以下方案</p>';
+  // Header
+  h += '<div class="rpt-header"><div class="rpt-tier">'+tier.emoji+' '+tier.name+'</div><div class="rpt-label">'+tier.label+' · 总分 '+sc.total+'/27</div></div>';
 
-  // Course card
-  h += '<div class="match-card"><span class="rec-badge">'+courseRec.badge+'</span><h4>'+courseRec.name+'</h4><div class="price">'+courseRec.price+'</div>';
-  h += '<p class="reason">'+reason+'</p>';
-  h += '<p class="match-modules">'+modules+'</p></div>';
+  // Radar
+  h += '<div class="radar-box"><p style="font-size:12px;color:var(--text3);margin-bottom:8px;">你的AI改造能力画像</p>'+drawRadar(dims)+'</div>';
 
-  // Community
-  h += '<div class="match-community"><div class="comm-label">推荐社群层级</div><div class="comm-name">'+commRec.name+'</div><div class="comm-price">'+commRec.price+'</div></div>';
+  // Analysis
+  h += '<div class="analysis">';
+  h += '<div class="strengths"><h4>✅ 你的优势领域：'+strongest+'</h4><p>这是你目前最扎实的能力维度。建议继续放大这个优势——把它变成你的差异化标签，在接项目时这会是你最有力的说服点。</p></div>';
+  h += '<div class="weakness"><h4>⚠ 提升空间最大的领域：'+weakest+'</h4><p>'+dimTips[weakest]+'</p></div>';
+  h += '<div class="path-rec"><h4>📋 你的整体情况</h4><p>'+tier.desc+'</p></div>';
+  h += '</div>';
 
-  document.getElementById('matchArea').innerHTML = h;
-  showStep('match');
+  // Soft course mention
+  h += '<div style="margin-top:24px;padding:24px 20px;background:#fff;border-radius:var(--radius);box-shadow:var(--shadow)">';
+  h += '<p style="font-size:12px;font-weight:600;letter-spacing:1.5px;color:var(--text3);margin-bottom:12px;">如果想让这些能力更进一步</p>';
+  h += '<p style="font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:16px;">根据你的诊断结果，<strong style="color:var(--text)">「'+courseName+'」</strong>是目前最适合你的提升路径——'+courseWhy+'</p>';
+  h += '<p style="font-size:12px;color:var(--text3);">适合的社群：'+commName+'</p>';
+  h += '</div>';
+
+  // Actions
+  h += '<div style="margin-top:20px;display:flex;flex-direction:column;gap:10px">';
+  h += '<a href="#" class="btn-consult" onclick="openSheet();return false" style="display:block;text-align:center;background:var(--p-deep);color:#fff;padding:14px;border-radius:26px;text-decoration:none;font-size:15px;font-weight:600">想了解更多？咨询77助理 →</a>';
+  h += '<button class="btn-retake" onclick="retake()" style="display:block;width:100%;background:#fff;color:var(--p-deep);border:.5px solid rgba(29,32,106,.12);padding:14px;border-radius:26px;font-size:14px;font-weight:600;cursor:pointer">重新测评</button>';
+  h += '</div>';
+
+  // Footer
+  h += '<div style="text-align:center;padding:32px 0 0;font-size:11px;color:var(--text3);border-top:.5px solid rgba(29,32,106,.04);margin-top:32px">本测评基于《AI高阶操盘手》课程能力模型设计<br>知行新商学 © 2025</div>';
+
+  document.getElementById('reportArea').innerHTML = h;
+  showStep('report');
 }
 
 function retake(){
